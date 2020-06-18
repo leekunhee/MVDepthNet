@@ -133,8 +133,9 @@ class depthNet(nn.Module):
         costvolume = Variable(
             torch.cuda.FloatTensor(left_image.shape[0], 64,
                                    left_image.shape[2], left_image.shape[3]))
-        image_height = 256
-        image_width = 320
+        image_height = left_image.shape[2]
+        image_width = left_image.shape[3]
+
         batch_number = left_image.shape[0]
 
         normalize_base = torch.cuda.FloatTensor(
@@ -172,8 +173,8 @@ class depthNet(nn.Module):
 
         upconv5 = self.upconv5(conv5)
         iconv5 = self.iconv5(torch.cat((upconv5, conv4), 1))
-
-        upconv4 = self.upconv4(iconv5)
+        upconv4 = self.upconv4(iconv5)[:, :, :, :135]
+        print(upconv4.shape, conv3.shape)
         iconv4 = self.iconv4(torch.cat((upconv4, conv3), 1))
         disp4 = 2.0 * self.disp4(iconv4)
         udisp4 = F.interpolate(disp4, scale_factor=2)

@@ -21,34 +21,31 @@ depthnet = depthnet.cuda()
 cudnn.benchmark = True
 depthnet.eval()
 
+WIDTH = 512
+HEIGHT = 960
+
 # for warp the image to construct the cost volume
-pixel_coordinate = np.indices([320, 256]).astype(np.float32)
+pixel_coordinate = np.indices([WIDTH, HEIGHT]).astype(np.float32)
 pixel_coordinate = np.concatenate(
-    (pixel_coordinate, np.ones([1, 320, 256])), axis=0)
+    (pixel_coordinate, np.ones([1, WIDTH, HEIGHT])), axis=0)
 pixel_coordinate = np.reshape(pixel_coordinate, [3, -1])
+
+
+k0 = np.load('data/k0.npy')
+k1 = np.load('data/k2.npy')
 
 # HERE is what you should provide
 left_image = cv2.imread(
-    "/home/wang/dataset/tum_rgbd/train/rgbd_dataset_freiburg1_xyz/rgb/1305031102.175304.png"
+    'data/B0.png'
 )
 right_image = cv2.imread(
-    "/home/wang/dataset/tum_rgbd/train/rgbd_dataset_freiburg1_xyz/rgb/1305031102.275326.png"
+    'data/C.png'
 )
-left_pose = np.asarray([
-    [0.07543147, 0.61393189, -0.78574661, 1.3405],
-    [0.9970987, -0.03837025, 0.06574118, 0.6266],
-    [0.01021131, -0.78842588, -0.61504501, 1.6575],
-    [0, 0, 0, 1]])
 
-right_pose = np.asarray(
-    [[6.40527011e-02, 6.40832173e-01, -7.65004168e-01, 1.3160],
-    [9.97946496e-01, -4.09736058e-02, 4.92336713e-02, 0.6254],
-    [2.05541383e-04, -7.66586779e-01, -6.42140692e-01, 1.6196],
-    [0, 0, 0, 1]])
+left_pose = np.load('data/rt0.npy')
+right_pose = np.load('data/rt2.npy')
+camera_k = k0
 
-camera_k = np.asarray([ [525.0, 0, 319.5],
-                        [0, 525.0, 239.5],
-                        [0, 0, 1]])
 
 # test the epipolar line
 left2right = np.dot(inv(right_pose), left_pose)
@@ -63,19 +60,19 @@ near_point = np.append(near_point, 1)
 near_point = np.dot(left2right, near_point)
 near_pixel = np.dot(camera_k, near_point[0:3])
 near_pixel = (near_pixel / near_pixel[2])[0:2]
-cv2.line(right_image, 
+cv2.line(right_image,
         (int(far_pixel[0] + 0.5), int(far_pixel[1] + 0.5)),
         (int(near_pixel[0] + 0.5), int(near_pixel[1] + 0.5)), [0,0,255], 4)
-cv2.circle(left_image,(test_point[0], test_point[1]), 4, [0,0,255], -1)
+cv2.circle(left_image,(int(test_point[0]), int(test_point[1])), 4, [0,0,255], -1)
 
 # scale to 320x256
 original_width = left_image.shape[1]
 original_height = left_image.shape[0]
-factor_x = 320.0 / original_width
-factor_y = 256.0 / original_height
+factor_x = float(WIDTH) / original_width
+factor_y = float(HEIGHT) / original_height
 
-left_image = cv2.resize(left_image, (320, 256))
-right_image = cv2.resize(right_image, (320, 256))
+left_image = cv2.resize(left_image, (WIDTH, HEIGHT))
+right_image = cv2.resize(right_image, (WIDTH, HEIGHT))
 camera_k[0, :] *= factor_x
 camera_k[1, :] *= factor_y
 
@@ -88,11 +85,12 @@ torch_right_image = np.expand_dims(torch_right_image, 0)
 torch_right_image = (torch_right_image - 81.0) / 35.0
 
 # process
-left_image_cuda = Tensor(torch_left_image).cuda()
-left_image_cuda = Variable(left_image_cuda, volatile=True)
+with torch.no_grad():
+    left_image_cuda = Tensor(torch_left_image).cuda()
+    left_image_cuda = Variable(left_image_cuda)
 
-right_image_cuda = Tensor(torch_right_image).cuda()
-right_image_cuda = Variable(right_image_cuda, volatile=True)
+    right_image_cuda = Tensor(torch_right_image).cuda()
+    right_image_cuda = Variable(right_image_cuda)
 
 left_in_right_T = left2right[0:3, 3]
 left_in_right_R = left2right[0:3, 0:3]
